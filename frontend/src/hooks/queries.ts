@@ -2,10 +2,16 @@ import { useQuery } from "@tanstack/react-query";
 
 import { api } from "../api/client";
 
-export function useSpots(lat: number, lon: number, radiusKm: number, enabled = true) {
+export function useSpots(
+  lat: number,
+  lon: number,
+  radiusKm: number,
+  opts: { category?: string; mode?: string; enabled?: boolean } = {},
+) {
+  const { category, mode = "darkness", enabled = true } = opts;
   return useQuery({
-    queryKey: ["spots", lat, lon, radiusKm],
-    queryFn: () => api.listSpots(lat, lon, radiusKm),
+    queryKey: ["spots", lat, lon, radiusKm, category ?? "all", mode],
+    queryFn: () => api.listSpots(lat, lon, radiusKm, { category, mode }),
     enabled,
     staleTime: 5 * 60 * 1000,
   });

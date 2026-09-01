@@ -31,6 +31,7 @@ router = APIRouter(prefix="/spots", tags=["spots"])
 KST = ZoneInfo("Asia/Seoul")
 
 
+# category 필터는 선택적이다. :categories 가 NULL 이면 전체, 아니면 해당 카테고리만.
 _SEARCH_SQL = text(
     """
     SELECT
@@ -45,10 +46,17 @@ _SEARCH_SQL = text(
         ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography,
         :radius_m
     )
+    AND (
+        CAST(:categories AS text) IS NULL
+        OR category = ANY(string_to_array(CAST(:categories AS text), ','))
+    )
     ORDER BY dist_m ASC
     LIMIT :limit
     """
 )
+
+_VALID_CATEGORIES = {"observatory", "campsite", "viewpoint", "park"}
+_VALID_MODES = {"darkness", "nearby"}
 
 
 async def _forecast_for_grid(
@@ -72,12 +80,36 @@ async def list_spots(
     lon: float = Query(..., ge=-180, le=180),
     radius_km: float = Query(100.0, gt=0, le=500),
     limit: int = Query(50, gt=0, le=300),
+    category: str | None = Query(
+        None,
+        description="쉼표구분 카테고리 필터 (observatory,campsite,viewpoint,park). 미지정=전체.",
+    ),
+    mode: str = Query(
+        "darkness", description="점수 모드: darkness(관측품질) | nearby(접근성 우선)"
+    ),
     db: Session = Depends(get_db),
 ) -> list[SpotSummary]:
+    if mode not in _VALID_MODES:
+        raise HTTPException(status_code=400, detail=f"mode must be one of {_VALID_MODES}")
+
+    categories_param: str | None = None
+    if category:
+        requested = [c.strip() for c in category.split(",") if c.strip()]
+        invalid = set(requested) - _VALID_CATEGORIES
+        if invalid:
+            raise HTTPException(status_code=400, detail=f"unknown category: {invalid}")
+        categories_param = ",".join(requested)
+
     rows = (
         db.execute(
             _SEARCH_SQL,
-            {"lat": lat, "lon": lon, "radius_m": radius_km * 1000.0, "limit": limit},
+            {
+                "lat": lat,
+                "lon": lon,
+                "radius_m": radius_km * 1000.0,
+                "limit": limit,
+                "categories": categories_param,
+            },
         )
         .mappings()
         .all()
@@ -102,6 +134,7 @@ async def list_spots(
             darkness=darkness,
             distance_km=distance_km,
             bundle=bundle,
+            mode=mode,
         )
         bd = assembled.breakdown
         results.append(

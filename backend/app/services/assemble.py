@@ -53,6 +53,7 @@ def assemble(
     darkness: int,
     distance_km: float,
     bundle: ForecastBundle | None,
+    mode: str = "darkness",
 ) -> AssembledScore:
     win = astro.night_window(lat, lon, date)
     access = scoring.access_from_distance(distance_km)
@@ -63,7 +64,7 @@ def assemble(
 
     if win is None or not win.hours:
         # 백야/극야 등 야간구간 없음 -> cloud 미반영 단일 점수
-        score, bd = scoring.compute_score(darkness, 0, moon, access)
+        score, bd = scoring.compute_score(darkness, 0, moon, access, mode=mode)
         return AssembledScore(hourly=[], best_hour=None, best_score=score, breakdown=bd)
 
     hourly: list[HourlyPoint] = []
@@ -73,7 +74,7 @@ def assemble(
 
     for h in win.hours:
         cloud = _cloud_for_hour(bundle, h)
-        s, bd = scoring.compute_score(darkness, cloud, moon, access)
+        s, bd = scoring.compute_score(darkness, cloud, moon, access, mode=mode)
         hourly.append(HourlyPoint(hour=h, score=s, cloud=cloud, moon=moon))
         if s > best_score:
             best_score = s

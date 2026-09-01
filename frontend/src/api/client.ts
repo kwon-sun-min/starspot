@@ -25,8 +25,22 @@ import type {
 } from "./types";
 
 export const api = {
-  listSpots: (lat: number, lon: number, radiusKm: number, limit = 50) =>
-    get<SpotSummary[]>("/spots", { lat, lon, radius_km: radiusKm, limit }),
+  listSpots: (
+    lat: number,
+    lon: number,
+    radiusKm: number,
+    opts: { limit?: number; category?: string; mode?: string } = {},
+  ) => {
+    const params: Record<string, string | number> = {
+      lat,
+      lon,
+      radius_km: radiusKm,
+      limit: opts.limit ?? 50,
+      mode: opts.mode ?? "darkness",
+    };
+    if (opts.category) params.category = opts.category;
+    return get<SpotSummary[]>("/spots", params);
+  },
 
   getSpot: (id: number) => get<SpotDetail>(`/spots/${id}`),
 

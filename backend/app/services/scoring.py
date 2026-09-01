@@ -12,10 +12,19 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-W_DARKNESS = 0.40
+# 기본(darkness) 모드 가중치. 관측 품질을 우선하되 접근성을 이전(0.10)보다 반영한다.
+W_DARKNESS = 0.35
 W_CLOUD = 0.35
-W_MOON = 0.15
-W_ACCESS = 0.10
+W_MOON = 0.10
+W_ACCESS = 0.20
+
+# "근처(nearby)" 모드 가중치. 가까움을 크게 우대해 일상적으로 갈 만한 곳을 상위로.
+W_NEARBY = {
+    "darkness": 0.25,
+    "cloud": 0.30,
+    "moon": 0.10,
+    "access": 0.35,
+}
 
 # VIIRS radiance 정규화 범위 (log10(r+0.1) 압축 후 이 구간을 0~100 에 매핑)
 # r=0(완전 암흑) -> log10(0.1) = -1.0,  r≈250(도심) -> log10(250.1) ≈ 2.4
@@ -45,8 +54,13 @@ def darkness_from_radiance(radiance: float | None) -> int:
 
 
 def access_from_distance(distance_km: float) -> int:
-    """접근성: max(0, 100 - d)."""
-    return int(max(0.0, 100.0 - distance_km))
+    """접근성 점수(0~100). 거리 감쇠를 완만하게: 100 - d*0.5.
+
+    이전(100 - d)은 100km 밖이 곧바로 0점이라 조금만 멀어도 접근성이 급락했다.
+    완만한 감쇠로 바꿔 100km도 50점을 주어, '가깝고 그럭저럭 어두운' 일상 관측지가
+    순위에 올라올 수 있게 한다.
+    """
+    return int(max(0.0, 100.0 - distance_km * 0.5))
 
 
 def cloud_from_kma(sky: int | None, pty: int | None) -> int:
@@ -69,13 +83,22 @@ def compute_score(
     cloud: int,
     moon: int,
     access: int,
+    mode: str = "darkness",
 ) -> tuple[int, Breakdown]:
-    """가중합으로 최종 점수(0~100)와 분해 항목을 반환."""
+    """가중합으로 최종 점수(0~100)와 분해 항목을 반환.
+
+    mode="darkness"(기본): 관측 품질 우선.
+    mode="nearby": 접근성을 크게 우대(일상적으로 갈 만한 곳 상위).
+    """
     d = _clamp(darkness)
     c = _clamp(cloud)
     m = _clamp(moon)
     a = _clamp(access)
-    raw = W_DARKNESS * d + W_CLOUD * (100 - c) + W_MOON * m + W_ACCESS * a
+    if mode == "nearby":
+        w = W_NEARBY
+        raw = w["darkness"] * d + w["cloud"] * (100 - c) + w["moon"] * m + w["access"] * a
+    else:
+        raw = W_DARKNESS * d + W_CLOUD * (100 - c) + W_MOON * m + W_ACCESS * a
     return round(raw), Breakdown(darkness=d, cloud=c, moon=m, access=a)
 
 

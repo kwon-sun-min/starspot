@@ -29,9 +29,10 @@ def test_darkness_none_neutral():
 
 @pytest.mark.parametrize(
     "d,expected",
-    [(0, 100), (50, 50), (100, 0), (150, 0)],
+    [(0, 100), (50, 75), (100, 50), (200, 0), (250, 0)],
 )
 def test_access_from_distance(d, expected):
+    """완만한 감쇠: 100 - d*0.5."""
     assert scoring.access_from_distance(d) == expected
 
 
@@ -56,11 +57,26 @@ def test_moon_from_interference():
     assert scoring.moon_from_interference(30.0) == 70
 
 
-def test_compute_score_formula():
-    """공식 검증: 0.40*90 + 0.35*(100-0) + 0.15*100 + 0.10*50 = 36+35+15+5 = 91."""
+def test_compute_score_formula_darkness_mode():
+    # 0.35*90 + 0.35*(100-0) + 0.10*100 + 0.20*50 = 31.5+35+10+10 = 86.5 -> 86
     score, bd = scoring.compute_score(darkness=90, cloud=0, moon=100, access=50)
-    assert score == 91
+    assert score == 86
     assert bd.darkness == 90 and bd.cloud == 0 and bd.moon == 100 and bd.access == 50
+
+
+def test_compute_score_nearby_mode_favors_access():
+    """근처 모드는 access 가중이 커서, 가까운(access 높은) 곳이 darkness 모드보다 유리하다."""
+    # darkness 는 낮지만 access 가 높은 도심 근교 케이스
+    dark_mode, _ = scoring.compute_score(40, 0, 100, 90, mode="darkness")
+    near_mode, _ = scoring.compute_score(40, 0, 100, 90, mode="nearby")
+    assert near_mode > dark_mode
+
+
+def test_access_gentler_decay():
+    """완만한 감쇠: 100km 에서도 50점 (이전엔 0점)."""
+    assert scoring.access_from_distance(100) == 50
+    assert scoring.access_from_distance(0) == 100
+    assert scoring.access_from_distance(200) == 0
 
 
 def test_compute_score_cloudy_penalizes():
