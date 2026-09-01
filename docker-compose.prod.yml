@@ -1,0 +1,34 @@
+# 프로덕션 오버레이. Docker Hub 에 푸시된 이미지를 사용한다 (빌드 없음).
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# 로컬 compose 와의 차이:
+#   - build 대신 image 태그 사용 (kwsumin01/*)
+#   - DB/Redis 는 호스트 포트를 노출하지 않는다 (내부 네트워크만)
+#   - restart: unless-stopped
+services:
+  postgis:
+    image: postgis/postgis:16-3.4
+    ports: []
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports: []
+    restart: unless-stopped
+
+  api:
+    image: kwsumin01/starspot-backend:latest
+    build: !reset null
+    restart: unless-stopped
+
+  worker:
+    image: kwsumin01/starspot-backend:latest
+    build: !reset null
+    restart: unless-stopped
+
+  nginx:
+    image: kwsumin01/starspot-frontend:latest
+    build: !reset null
+    restart: unless-stopped
+    ports:
+      - "80:80"

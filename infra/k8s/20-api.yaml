@@ -1,0 +1,92 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  namespace: starspot
+  labels:
+    app: api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      # 마이그레이션 + 시드는 initContainer 에서 1회 실행 (앱 컨테이너 시작 전)
+      initContainers:
+        - name: migrate-seed
+          image: kwsumin01/starspot-backend:latest
+          command:
+            - sh
+            - -c
+            - "alembic upgrade head && python -m scripts.seed_spots"
+          env: &backend_env
+            - name: DATABASE_URL
+              value: "postgresql+psycopg://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)"
+            - name: POSTGRES_USER
+              valueFrom: { secretKeyRef: { name: starspot-secret, key: POSTGRES_USER } }
+            - name: POSTGRES_PASSWORD
+              valueFrom: { secretKeyRef: { name: starspot-secret, key: POSTGRES_PASSWORD } }
+            - name: DB_HOST
+              valueFrom: { configMapKeyRef: { name: starspot-config, key: DB_HOST } }
+            - name: DB_PORT
+              valueFrom: { configMapKeyRef: { name: starspot-config, key: DB_PORT } }
+            - name: DB_NAME
+              valueFrom: { configMapKeyRef: { name: starspot-config, key: DB_NAME } }
+            - name: REDIS_URL
+              valueFrom: { configMapKeyRef: { name: starspot-config, key: REDIS_URL } }
+            - name: KMA_SERVICE_KEY
+              valueFrom: { secretKeyRef: { name: starspot-secret, key: KMA_SERVICE_KEY } }
+            - name: TZ
+              valueFrom: { configMapKeyRef: { name: starspot-config, key: TZ } }
+            - name: LOG_LEVEL
+              valueFrom: { configMapKeyRef: { name: starspot-config, key: LOG_LEVEL } }
+            - name: PYTHONPATH
+              value: "/app"
+      containers:
+        - name: api
+          image: kwsumin01/starspot-backend:latest
+          command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+          ports:
+            - containerPort: 8000
+          env: *backend_env
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: 8000
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+  namespace: starspot
+  labels:
+    app: api
+spec:
+  selector:
+    app: api
+  ports:
+    - port: 8000
+      targetPort: 8000

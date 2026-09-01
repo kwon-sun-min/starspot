@@ -1,0 +1,55 @@
+[project]
+name = "starspot-backend"
+version = "0.1.0"
+description = "StarSpot backend — 별 보기 좋은 장소 추천 서비스"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "sqlalchemy>=2.0",
+    "geoalchemy2>=0.15",
+    "psycopg[binary]>=3.2",
+    "alembic>=1.13",
+    "httpx>=0.27",
+    "redis>=5.1",
+    "astronomy-engine>=2.1.19",
+    "apscheduler>=3.10",
+    "tenacity>=9.0",
+    "prometheus-client>=0.21",
+]
+
+[project.optional-dependencies]
+batch = [
+    "rasterio>=1.3",
+    "numpy>=1.26",
+]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "fakeredis>=2.25",
+    "ruff>=0.7",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP", "B"]
+# B008: FastAPI 의 Depends()/Query() 를 인자 기본값에 두는 것은 의도된 패턴이다.
+ignore = ["B008"]

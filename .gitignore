@@ -1,0 +1,21 @@
+# secrets
+.env
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+*.egg-info/
+
+# node
+node_modules/
+dist/
+
+# VIIRS 원본/대용량 래스터 (리포지토리에 커밋 금지)
+backend/data/*.tif
+backend/data/*.tiff
+backend/data/viirs_*.tif
+
+# OS
+.DS_Store

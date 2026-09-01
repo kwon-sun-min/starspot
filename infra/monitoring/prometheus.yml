@@ -1,0 +1,18 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # StarSpot API 의 /metrics 를 스크랩.
+  # docker-compose.monitoring.yml 로 함께 띄우면 서비스명 'api' 로 접근 가능.
+  - job_name: starspot-api
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["api:8000"]
+        labels:
+          service: starspot-api
+
+  # Prometheus 자기 자신
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

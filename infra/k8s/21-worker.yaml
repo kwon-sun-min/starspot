@@ -1,0 +1,103 @@
+# 예보 프리페치를 실행하는 두 가지 방식을 제공한다:
+#  (A) worker Deployment  : APScheduler 로 상시 구동 (docker-compose 와 동일)
+#  (B) prefetch CronJob   : k8s 네이티브 스케줄링. (A) 대신 쓰려면 worker 를 0 replica 로.
+# 기본은 (A) 를 활성화하고 (B) 는 참고용으로 함께 둔다. 둘 다 켜도 캐시라 안전하지만
+# 중복 호출을 피하려면 하나만 사용하는 것을 권장한다.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker
+  namespace: starspot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: worker
+  template:
+    metadata:
+      labels:
+        app: worker
+    spec:
+      containers:
+        - name: worker
+          image: kwsumin01/starspot-backend:latest
+          command: ["python", "-m", "app.workers.refresh"]
+          env: &backend_env
+            - name: DATABASE_URL
+              value: "postgresql+psycopg://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)"
+            - name: POSTGRES_USER
+              valueFrom: { secretKeyRef: { name: starspot-secret, key: POSTGRES_USER } }
+            - name: POSTGRES_PASSWORD
+              valueFrom: { secretKeyRef: { name: starspot-secret, key: POSTGRES_PASSWORD } }
+            - name: DB_HOST
+              valueFrom: { configMapKeyRef: { name: starspot-config, key: DB_HOST } }
+            - name: DB_PORT
+              valueFrom: { configMapKeyRef: { name: starspot-config, key: DB_PORT } }
+            - name: DB_NAME
+              valueFrom: { configMapKeyRef: { name: starspot-config, key: DB_NAME } }
+            - name: REDIS_URL
+              valueFrom: { configMapKeyRef: { name: starspot-config, key: REDIS_URL } }
+            - name: KMA_SERVICE_KEY
+              valueFrom: { secretKeyRef: { name: starspot-secret, key: KMA_SERVICE_KEY } }
+            - name: TZ
+              valueFrom: { configMapKeyRef: { name: starspot-config, key: TZ } }
+            - name: LOG_LEVEL
+              valueFrom: { configMapKeyRef: { name: starspot-config, key: LOG_LEVEL } }
+            - name: PYTHONPATH
+              value: "/app"
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "128Mi"
+            limits:
+              cpu: "250m"
+              memory: "256Mi"
+---
+# (B) k8s 네이티브 CronJob: 기상청 발표시각 직후(+15분)에 프리페치 1회 실행.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: kma-prefetch
+  namespace: starspot
+spec:
+  # 02/05/08/11/14/17/20/23시 + 15분 (KST). 클러스터 타임존에 맞춰 조정 필요.
+  schedule: "15 2,5,8,11,14,17,20,23 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: prefetch
+              image: kwsumin01/starspot-backend:latest
+              command:
+                - python
+                - -c
+                - "import asyncio; from app.workers.refresh import prefetch_all; asyncio.run(prefetch_all())"
+              env:
+                - name: DATABASE_URL
+                  value: "postgresql+psycopg://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)"
+                - name: POSTGRES_USER
+                  valueFrom: { secretKeyRef: { name: starspot-secret, key: POSTGRES_USER } }
+                - name: POSTGRES_PASSWORD
+                  valueFrom: { secretKeyRef: { name: starspot-secret, key: POSTGRES_PASSWORD } }
+                - name: DB_HOST
+                  valueFrom: { configMapKeyRef: { name: starspot-config, key: DB_HOST } }
+                - name: DB_PORT
+                  valueFrom: { configMapKeyRef: { name: starspot-config, key: DB_PORT } }
+                - name: DB_NAME
+                  valueFrom: { configMapKeyRef: { name: starspot-config, key: DB_NAME } }
+                - name: REDIS_URL
+                  valueFrom: { configMapKeyRef: { name: starspot-config, key: REDIS_URL } }
+                - name: KMA_SERVICE_KEY
+                  valueFrom: { secretKeyRef: { name: starspot-secret, key: KMA_SERVICE_KEY } }
+                - name: TZ
+                  valueFrom: { configMapKeyRef: { name: starspot-config, key: TZ } }
+                - name: LOG_LEVEL
+                  valueFrom: { configMapKeyRef: { name: starspot-config, key: LOG_LEVEL } }
+                - name: PYTHONPATH
+                  value: "/app"

@@ -1,0 +1,103 @@
+services:
+  postgis:
+    image: postgis/postgis:16-3.4
+    container_name: starspot-postgis
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-starspot}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-starspot}
+      POSTGRES_DB: ${POSTGRES_DB:-starspot}
+      TZ: ${TZ:-Asia/Seoul}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgis_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-starspot} -d ${POSTGRES_DB:-starspot}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  redis:
+    image: redis:7-alpine
+    container_name: starspot-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: starspot-backend:dev
+    container_name: starspot-api
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-starspot}:${POSTGRES_PASSWORD:-starspot}@postgis:5432/${POSTGRES_DB:-starspot}
+      REDIS_URL: redis://redis:6379/0
+      KMA_SERVICE_KEY: ${KMA_SERVICE_KEY:-}
+      TZ: ${TZ:-Asia/Seoul}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      PYTHONPATH: /app
+    # 기동 시 마이그레이션 + 시드 후 API 실행
+    command: >
+      sh -c "alembic upgrade head &&
+             python -m scripts.seed_spots &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    depends_on:
+      postgis:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: starspot-backend:dev
+    container_name: starspot-worker
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-starspot}:${POSTGRES_PASSWORD:-starspot}@postgis:5432/${POSTGRES_DB:-starspot}
+      REDIS_URL: redis://redis:6379/0
+      KMA_SERVICE_KEY: ${KMA_SERVICE_KEY:-}
+      TZ: ${TZ:-Asia/Seoul}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      PYTHONPATH: /app
+    command: ["python", "-m", "app.workers.refresh"]
+    # worker 는 HTTP 서버가 아니므로 api 이미지의 HEALTHCHECK 를 비활성화한다.
+    healthcheck:
+      disable: true
+    depends_on:
+      api:
+        condition: service_healthy
+
+  nginx:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    image: starspot-frontend:dev
+    container_name: starspot-nginx
+    environment:
+      KAKAO_MAP_KEY: ${KAKAO_MAP_KEY:-}
+    ports:
+      - "8080:80"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  postgis_data:
+  redis_data:
