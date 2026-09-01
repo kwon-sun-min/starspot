@@ -25,10 +25,10 @@ export function useSpot(id: number | null) {
   });
 }
 
-export function useForecast(id: number | null) {
+export function useForecast(id: number | null, date?: string) {
   return useQuery({
-    queryKey: ["forecast", id],
-    queryFn: () => api.getForecast(id as number),
+    queryKey: ["forecast", id, date ?? "today"],
+    queryFn: () => api.getForecast(id as number, date),
     enabled: id != null,
     staleTime: 30 * 60 * 1000,
   });

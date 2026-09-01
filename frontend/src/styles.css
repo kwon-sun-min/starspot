@@ -296,17 +296,108 @@ body {
   text-decoration: none;
 }
 
-.chart-section {
-  margin-top: 28px;
+/* ---- 관측 가이드 카드 ---- */
+.guide-card {
+  margin-top: 20px;
+  display: flex;
+  gap: 16px;
+  align-items: center;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 16px;
   padding: 18px;
 }
 
+.guide-badge {
+  flex: 0 0 auto;
+  width: 84px;
+  height: 84px;
+  border: 3px solid var(--accent);
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.guide-score {
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.guide-score-label {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.guide-body {
+  min-width: 0;
+}
+
+.guide-title {
+  font-weight: 700;
+  font-size: 15px;
+  margin-bottom: 4px;
+}
+
+.guide-desc {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 0 0 6px;
+  line-height: 1.5;
+}
+
+.guide-advice {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text);
+}
+
+/* ---- 차트 헤더 + 날짜 선택 ---- */
+.chart-section {
+  margin-top: 20px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 18px;
+}
+
+.chart-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
 .chart-section h2 {
   font-size: 15px;
-  margin: 0 0 12px;
+  margin: 0;
+}
+
+.date-picker {
+  display: flex;
+  gap: 6px;
+}
+
+.date-chip {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.date-chip.on {
+  border-color: var(--accent);
+  color: #06121a;
+  background: var(--accent);
+  font-weight: 700;
 }
 
 .best-hour {

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
   CartesianGrid,
@@ -11,18 +12,40 @@ import {
 
 import { SkeletonLine } from "../components/Skeleton";
 import { useForecast, useSpot } from "../hooks/queries";
-import { CATEGORY_LABEL, scoreColor } from "../lib/score";
+import { bortleGuide, CATEGORY_LABEL, scoreAdvice, scoreColor } from "../lib/score";
 
 function hourLabel(iso: string): string {
   const d = new Date(iso);
   return `${String(d.getHours()).padStart(2, "0")}시`;
 }
 
+// KST 기준 오늘/내일/모레 날짜(YYYY-MM-DD) 옵션 생성.
+function dateOptions(): { key: string; label: string; value: string }[] {
+  const fmt = (offset: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() + offset);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  };
+  return [
+    { key: "today", label: "오늘 밤", value: fmt(0) },
+    { key: "tomorrow", label: "내일 밤", value: fmt(1) },
+    { key: "day2", label: "모레 밤", value: fmt(2) },
+  ];
+}
+
 export function DetailPage() {
   const { id } = useParams();
   const spotId = id ? Number(id) : null;
   const spot = useSpot(spotId);
-  const forecast = useForecast(spotId);
+
+  const dates = dateOptions();
+  const [dateKey, setDateKey] = useState("today");
+  const selectedDate = dates.find((d) => d.key === dateKey)!;
+  // "오늘"은 date 미지정(백엔드 기본값), 그 외는 명시적으로 전달
+  const forecast = useForecast(spotId, dateKey === "today" ? undefined : selectedDate.value);
 
   const chartData =
     forecast.data?.hourly.map((h) => ({
@@ -30,6 +53,9 @@ export function DetailPage() {
       score: h.score,
       cloud: h.cloud,
     })) ?? [];
+
+  const guide = bortleGuide(spot.data?.bortle ?? null);
+  const bestScore = forecast.data?.best_score ?? 0;
 
   const directionsUrl =
     spot.data &&
@@ -74,8 +100,37 @@ export function DetailPage() {
             )}
           </header>
 
+          {/* 관측 맥락 가이드 */}
+          <section className="guide-card">
+            <div className="guide-badge" style={{ borderColor: scoreColor(bestScore) }}>
+              <span className="guide-score" style={{ color: scoreColor(bestScore) }}>
+                {bestScore}
+              </span>
+              <span className="guide-score-label">오늘 밤 점수</span>
+            </div>
+            <div className="guide-body">
+              <div className="guide-title">{guide.title}</div>
+              <p className="guide-desc">{guide.desc}</p>
+              {forecast.data && <p className="guide-advice">{scoreAdvice(bestScore)}</p>}
+            </div>
+          </section>
+
           <section className="chart-section">
-            <h2>시간대별 관측 점수 (일몰~일출)</h2>
+            <div className="chart-header">
+              <h2>시간대별 관측 점수 (일몰~일출)</h2>
+              <div className="date-picker">
+                {dates.map((d) => (
+                  <button
+                    key={d.key}
+                    className={`date-chip${d.key === dateKey ? " on" : ""}`}
+                    onClick={() => setDateKey(d.key)}
+                  >
+                    {d.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {forecast.isLoading ? (
               <SkeletonLine width="100%" />
             ) : chartData.length === 0 ? (
@@ -107,9 +162,9 @@ export function DetailPage() {
                 </ResponsiveContainer>
                 <p className="best-hour">
                   최적 시각:{" "}
-                  <strong style={{ color: scoreColor(forecast.data?.best_score ?? 0) }}>
+                  <strong style={{ color: scoreColor(bestScore) }}>
                     {forecast.data?.best_hour ? hourLabel(forecast.data.best_hour) : "-"} (
-                    {forecast.data?.best_score})
+                    {bestScore})
                   </strong>
                 </p>
               </>

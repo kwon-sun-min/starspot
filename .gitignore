@@ -11,6 +11,7 @@ __pycache__/
 # node
 node_modules/
 dist/
+*.tsbuildinfo
 
 # VIIRS 원본/대용량 래스터 (리포지토리에 커밋 금지)
 backend/data/*.tif
