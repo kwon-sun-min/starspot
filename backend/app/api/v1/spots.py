@@ -21,10 +21,14 @@ from app.schemas.spot import (
     Breakdown,
     ForecastResponse,
     HourlyScore,
+    SkyConstellation,
+    SkyPoint,
+    SkyStar,
+    SkyViewResponse,
     SpotDetail,
     SpotSummary,
 )
-from app.services import assemble, scoring
+from app.services import assemble, scoring, stars
 from app.services.kma import ForecastBundle, compute_base_time, fetch_forecast
 
 router = APIRouter(prefix="/spots", tags=["spots"])
@@ -257,4 +261,59 @@ async def get_forecast(
         best_hour=assembled.best_hour,
         best_score=assembled.best_score,
         stale=stale,
+    )
+
+
+@router.get("/{spot_id}/skyview", response_model=SkyViewResponse)
+def get_skyview(
+    spot_id: int,
+    at: str | None = Query(
+        None,
+        description="ISO8601 datetime(KST). 미지정 시 오늘 밤 22시.",
+    ),
+    db: Session = Depends(get_db),
+) -> SkyViewResponse:
+    """상세 화면 밤하늘 위젯용: 해당 시각·지점에서 지평선 위 밝은 별들의 alt/az."""
+    row = (
+        db.execute(
+            text(
+                """
+                SELECT ST_Y(geom::geometry) AS lat, ST_X(geom::geometry) AS lon
+                FROM spots WHERE id = :id
+                """
+            ),
+            {"id": spot_id},
+        )
+        .mappings()
+        .first()
+    )
+    if row is None:
+        raise HTTPException(status_code=404, detail="spot not found")
+
+    if at:
+        try:
+            when = datetime.fromisoformat(at)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail="invalid datetime") from e
+        if when.tzinfo is None:
+            when = when.replace(tzinfo=KST)
+    else:
+        # 기본: 오늘(밤 22시 KST)
+        when = datetime.now(KST).replace(hour=22, minute=0, second=0, microsecond=0)
+
+    projected = stars.project_sky(row["lat"], row["lon"], when)
+    constellations = stars.project_constellations(row["lat"], row["lon"], when)
+    return SkyViewResponse(
+        spot_id=spot_id,
+        at=when,
+        stars=[SkyStar(name=p.name, alt=p.alt, az=p.az, mag=p.mag) for p in projected],
+        constellations=[
+            SkyConstellation(
+                name=c.name,
+                name_ko=c.name_ko,
+                points=[SkyPoint(alt=pt[0], az=pt[1]) for pt in c.points],
+                lines=c.lines,
+            )
+            for c in constellations
+        ],
     )

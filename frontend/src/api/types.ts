@@ -59,3 +59,29 @@ export interface AstroResponse {
 }
 
 export type SpotCategory = "observatory" | "campsite" | "viewpoint" | "park";
+
+export interface SkyStar {
+  name: string;
+  alt: number;
+  az: number;
+  mag: number;
+}
+
+export interface SkyPoint {
+  alt: number;
+  az: number;
+}
+
+export interface SkyConstellation {
+  name: string;
+  name_ko: string;
+  points: SkyPoint[];
+  lines: [number, number][];
+}
+
+export interface SkyViewResponse {
+  spot_id: number;
+  at: string;
+  stars: SkyStar[];
+  constellations: SkyConstellation[];
+}

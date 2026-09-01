@@ -63,3 +63,29 @@ class AstroResponse(BaseModel):
     moonset: datetime | None
     moon_phase_deg: float
     moon_illumination: float
+
+
+class SkyStar(BaseModel):
+    name: str
+    alt: float  # 고도(도)
+    az: float   # 방위(도)
+    mag: float  # 겉보기 등급
+
+
+class SkyPoint(BaseModel):
+    alt: float
+    az: float
+
+
+class SkyConstellation(BaseModel):
+    name: str
+    name_ko: str
+    points: list[SkyPoint]
+    lines: list[tuple[int, int]]
+
+
+class SkyViewResponse(BaseModel):
+    spot_id: int
+    at: datetime
+    stars: list[SkyStar]
+    constellations: list[SkyConstellation] = []

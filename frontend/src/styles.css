@@ -405,6 +405,40 @@ body {
   color: var(--muted);
 }
 
+/* ---- 밤하늘 위젯 ---- */
+.sky-section {
+  margin-top: 20px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 18px;
+}
+
+.sky-section h2 {
+  font-size: 15px;
+  margin: 0 0 12px;
+}
+
+.sky-time {
+  color: var(--muted);
+  font-weight: 400;
+  font-size: 13px;
+}
+
+.sky-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.sky-caption {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 0;
+  text-align: center;
+}
+
 /* ---- 상태 ---- */
 .empty,
 .error {

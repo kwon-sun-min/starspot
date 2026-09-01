@@ -20,6 +20,7 @@ async function get<T>(path: string, params?: Record<string, string | number>): P
 import type {
   AstroResponse,
   ForecastResponse,
+  SkyViewResponse,
   SpotDetail,
   SpotSummary,
 } from "./types";
@@ -49,4 +50,7 @@ export const api = {
 
   getAstro: (lat: number, lon: number, date?: string) =>
     get<AstroResponse>("/astro", date ? { lat, lon, date } : { lat, lon }),
+
+  getSkyView: (id: number, at?: string) =>
+    get<SkyViewResponse>(`/spots/${id}/skyview`, at ? { at } : undefined),
 };

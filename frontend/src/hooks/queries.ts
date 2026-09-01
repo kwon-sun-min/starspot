@@ -33,3 +33,12 @@ export function useForecast(id: number | null, date?: string) {
     staleTime: 30 * 60 * 1000,
   });
 }
+
+export function useSkyView(id: number | null, at?: string) {
+  return useQuery({
+    queryKey: ["skyview", id, at ?? "default"],
+    queryFn: () => api.getSkyView(id as number, at),
+    enabled: id != null,
+    staleTime: 30 * 60 * 1000,
+  });
+}

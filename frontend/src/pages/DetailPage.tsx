@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   CartesianGrid,
   Line,
@@ -11,7 +11,8 @@ import {
 } from "recharts";
 
 import { SkeletonLine } from "../components/Skeleton";
-import { useForecast, useSpot } from "../hooks/queries";
+import { SkyView } from "../components/SkyView";
+import { useForecast, useSkyView, useSpot } from "../hooks/queries";
 import { bortleGuide, CATEGORY_LABEL, scoreAdvice, scoreColor } from "../lib/score";
 
 function hourLabel(iso: string): string {
@@ -38,11 +39,22 @@ function dateOptions(): { key: string; label: string; value: string }[] {
 
 export function DetailPage() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const spotId = id ? Number(id) : null;
   const spot = useSpot(spotId);
 
+  // ESC 로 목록으로 복귀
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") navigate("/");
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [navigate]);
+
   const dates = dateOptions();
   const [dateKey, setDateKey] = useState("today");
+  const [showConstellations, setShowConstellations] = useState(true);
   const selectedDate = dates.find((d) => d.key === dateKey)!;
   // "오늘"은 date 미지정(백엔드 기본값), 그 외는 명시적으로 전달
   const forecast = useForecast(spotId, dateKey === "today" ? undefined : selectedDate.value);
@@ -53,6 +65,12 @@ export function DetailPage() {
       score: h.score,
       cloud: h.cloud,
     })) ?? [];
+
+  // 밤하늘: 최적 시각(없으면 선택 날짜 22시) 기준
+  const skyAt =
+    forecast.data?.best_hour ??
+    (dateKey === "today" ? undefined : `${selectedDate.value}T22:00:00+09:00`);
+  const skyview = useSkyView(spotId, skyAt ?? undefined);
 
   const guide = bortleGuide(spot.data?.bortle ?? null);
   const bestScore = forecast.data?.best_score ?? 0;
@@ -168,6 +186,40 @@ export function DetailPage() {
                   </strong>
                 </p>
               </>
+            )}
+          </section>
+
+          <section className="sky-section">
+            <div className="chart-header">
+              <h2>
+                이 시각 밤하늘
+                {skyAt && <span className="sky-time"> · {hourLabel(skyAt)} 기준</span>}
+              </h2>
+              <button
+                className={`cat-chip${showConstellations ? " on" : ""}`}
+                onClick={() => setShowConstellations((v) => !v)}
+              >
+                별자리 {showConstellations ? "켜짐" : "꺼짐"}
+              </button>
+            </div>
+            {skyview.isLoading ? (
+              <SkeletonLine width="100%" />
+            ) : (skyview.data?.stars.length ?? 0) === 0 ? (
+              <p className="empty">이 시각에는 지평선 위 밝은 별이 없어요.</p>
+            ) : (
+              <div className="sky-wrap">
+                <SkyView
+                  stars={skyview.data!.stars}
+                  constellations={skyview.data!.constellations}
+                  showConstellations={showConstellations}
+                />
+                <p className="sky-caption">
+                  천정이 가운데, 지평선이 바깥 원이에요. 밝은 별일수록 크게 표시됩니다.
+                  {showConstellations && skyview.data!.constellations.length > 0 && (
+                    <> 오늘 밤 별자리 {skyview.data!.constellations.length}개가 보여요.</>
+                  )}
+                </p>
+              </div>
             )}
           </section>
         </>
