@@ -25,6 +25,53 @@ function starRadius(mag: number): number {
   return Math.max(0.8, 3.2 - mag * 0.7);
 }
 
+interface LabelBox {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+// 이미 배치된 라벨들과 겹치지 않는 위치를 찾는다.
+// 기본 위치에서 위/아래로 조금씩 밀어보고, 전부 겹치면 null(생략).
+function placeLabel(
+  cx: number,
+  cy: number,
+  w: number,
+  h: number,
+  placed: LabelBox[],
+): { x: number; y: number } | null {
+  const candidates = [0, -12, 12, -22, 22, -32, 32];
+  for (const dy of candidates) {
+    const box: LabelBox = { x: cx - w / 2, y: cy + dy - h / 2, w, h };
+    const hit = placed.some(
+      (p) => !(box.x + box.w < p.x || box.x > p.x + p.w || box.y + box.h < p.y || box.y > p.y + p.h),
+    );
+    if (!hit) {
+      placed.push(box);
+      return { x: cx, y: cy + dy };
+    }
+  }
+  return null;
+}
+
+// 배경 박스 + 텍스트로 어떤 배경 위에서도 읽히는 라벨을 그린다.
+function drawLabel(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  color: string,
+) {
+  const padX = 3;
+  const w = ctx.measureText(text).width;
+  ctx.fillStyle = "rgba(5,7,15,0.55)";
+  ctx.fillRect(x - w / 2 - padX, y - 7, w + padX * 2, 14);
+  ctx.fillStyle = color;
+  ctx.textAlign = "center";
+  ctx.fillText(text, x, y);
+}
+
 export function SkyView({
   stars,
   constellations = [],
@@ -81,14 +128,16 @@ export function SkyView({
     ctx.fillText("E", cx + radius - 8, cy);
     ctx.fillText("W", cx - radius + 8, cy);
 
-    // 별자리 선/이름 (별보다 먼저 그려 별이 위에 오게)
+    // 배치된 라벨 상자 추적 (별자리명 + 별명 공유해 서로 겹치지 않게)
+    const placed: LabelBox[] = [];
+
+    // 별자리 선 (별보다 먼저 그려 별이 위에 오게). 이름 라벨은 나중에 일괄 배치.
+    const conLabels: { text: string; x: number; y: number }[] = [];
     if (showConstellations) {
-      ctx.strokeStyle = "rgba(120,160,230,0.45)";
+      ctx.strokeStyle = "rgba(120,160,230,0.4)";
       ctx.lineWidth = 1;
       ctx.font = "10px sans-serif";
-      ctx.textAlign = "center";
       for (const con of constellations) {
-        // 선: 양 끝 별이 모두 지평선 위(alt>0)일 때만 연결
         for (const [a, b] of con.lines) {
           const pa = con.points[a];
           const pb = con.points[b];
@@ -100,7 +149,6 @@ export function SkyView({
           ctx.lineTo(cx + p2.x, cy + p2.y);
           ctx.stroke();
         }
-        // 이름: 지평선 위 별들의 중심에 라벨
         const vis = con.points.filter((p) => p.alt > 0);
         if (vis.length) {
           let sx = 0;
@@ -110,15 +158,12 @@ export function SkyView({
             sx += pr.x;
             sy += pr.y;
           }
-          sx /= vis.length;
-          sy /= vis.length;
-          ctx.fillStyle = "rgba(140,170,220,0.7)";
-          ctx.fillText(con.name_ko, cx + sx, cy + sy);
+          conLabels.push({ text: con.name_ko, x: cx + sx / vis.length, y: cy + sy / vis.length });
         }
       }
     }
 
-    // 별 그리기 (밝은 것부터, 밝은 별은 이름 라벨)
+    // 별 그리기 (밝은 것부터)
     const sorted = [...stars].sort((a, b) => a.mag - b.mag);
     for (const s of sorted) {
       const { x, y } = project(s.alt, s.az, radius);
@@ -133,13 +178,26 @@ export function SkyView({
       ctx.fill();
       ctx.shadowBlur = 0;
     }
-    // 아주 밝은 별(≤1.0등급)만 이름 표시
-    ctx.fillStyle = "rgba(200,215,245,0.85)";
+
+    // ---- 라벨 배치 (충돌 회피). 별자리명 먼저(넓은 영역), 그다음 밝은 별 이름 ----
     ctx.font = "10px sans-serif";
-    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+
+    // 별자리명: 지평선 원 안에 있는 것만
+    for (const l of conLabels) {
+      const dist = Math.hypot(l.x - cx, l.y - cy);
+      if (dist > radius) continue;
+      const w = ctx.measureText(l.text).width + 6;
+      const pos = placeLabel(l.x, l.y, w, 14, placed);
+      if (pos) drawLabel(ctx, l.text, pos.x, pos.y, "rgba(150,180,230,0.92)");
+    }
+
+    // 아주 밝은 별(≤1.0등급) 이름
     for (const s of sorted.filter((x) => x.mag <= 1.0)) {
       const { x, y } = project(s.alt, s.az, radius);
-      ctx.fillText(s.name, cx + x + 5, cy + y);
+      const w = ctx.measureText(s.name).width + 6;
+      const pos = placeLabel(cx + x, cy + y - 9, w, 13, placed);
+      if (pos) drawLabel(ctx, s.name, pos.x, pos.y, "rgba(215,225,250,0.92)");
     }
   }, [stars, constellations, showConstellations, size]);
 
