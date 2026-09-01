@@ -1,9 +1,25 @@
-// 얇은 fetch 래퍼. 프론트는 외부 API 를 직접 호출하지 않고 항상 /api 를 경유한다.
+// 얇은 fetch 래퍼.
+// API base 결정 순서:
+//   1) 런타임 주입값 window.__ENV__.API_BASE (컨테이너 배포)
+//   2) 빌드 환경변수 VITE_API_BASE (Vercel 등, 백엔드 절대 URL)
+//   3) 기본값 "/api/v1" (로컬 compose: nginx 가 /api 를 백엔드로 프록시)
+// 절대 URL(예: https://api.example.com)이면 뒤에 /api/v1 을 붙인다.
+function resolveBase(): string {
+  const runtime =
+    typeof window !== "undefined" ? window.__ENV__?.API_BASE : undefined;
+  const buildTime = import.meta.env.VITE_API_BASE as string | undefined;
+  const raw = (runtime || buildTime || "").trim();
+  if (!raw) return "/api/v1";
+  const trimmed = raw.replace(/\/+$/, "");
+  return trimmed.endsWith("/api/v1") ? trimmed : `${trimmed}/api/v1`;
+}
 
-const BASE = "/api/v1";
+const BASE = resolveBase();
 
 async function get<T>(path: string, params?: Record<string, string | number>): Promise<T> {
-  const url = new URL(BASE + path, window.location.origin);
+  // BASE 가 절대 URL 이면 그대로, 상대경로면 현재 origin 기준.
+  const isAbsolute = /^https?:\/\//i.test(BASE);
+  const url = new URL(BASE + path, isAbsolute ? undefined : window.location.origin);
   if (params) {
     for (const [k, v] of Object.entries(params)) {
       url.searchParams.set(k, String(v));

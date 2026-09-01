@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 
-// 런타임 주입 키. index.html 이 로드하는 /env.js 가 window.__ENV__ 를 채운다.
+// 런타임 주입 키. 컨테이너 배포는 index.html 이 로드하는 /env.js 가 window.__ENV__ 를 채운다.
+// Vercel 등 정적 배포는 env.js 가 없으므로 Vite 빌드 환경변수(VITE_KAKAO_MAP_KEY)로 대체한다.
 declare global {
   interface Window {
     kakao: any;
-    __ENV__?: { KAKAO_MAP_KEY?: string };
+    __ENV__?: { KAKAO_MAP_KEY?: string; API_BASE?: string };
   }
 }
 
@@ -31,7 +32,9 @@ export function useKakaoLoader(): { ready: boolean; error: string | null } {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const key = window.__ENV__?.KAKAO_MAP_KEY;
+    const key =
+      window.__ENV__?.KAKAO_MAP_KEY ||
+      (import.meta.env.VITE_KAKAO_MAP_KEY as string | undefined);
     if (!key) {
       setError("카카오맵 키가 설정되지 않았습니다 (KAKAO_MAP_KEY).");
       return;
